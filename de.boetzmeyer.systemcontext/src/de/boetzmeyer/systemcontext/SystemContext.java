@@ -1,14 +1,10 @@
 package de.boetzmeyer.systemcontext;
 
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import de.boetzmeyer.systemmodel.ApplicationConfig;
-import de.boetzmeyer.systemmodel.ApplicationDataModel;
 import de.boetzmeyer.systemmodel.ApplicationInstallation;
 import de.boetzmeyer.systemmodel.ApplicationInterface;
 import de.boetzmeyer.systemmodel.ApplicationLink;
@@ -16,7 +12,6 @@ import de.boetzmeyer.systemmodel.ApplicationSession;
 import de.boetzmeyer.systemmodel.ApplicationType;
 import de.boetzmeyer.systemmodel.Computer;
 import de.boetzmeyer.systemmodel.ConfigurationItem;
-import de.boetzmeyer.systemmodel.ConfigurationItemLink;
 import de.boetzmeyer.systemmodel.DataModel;
 import de.boetzmeyer.systemmodel.DatabaseInstallation;
 import de.boetzmeyer.systemmodel.DatabaseSession;
@@ -38,40 +33,66 @@ import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemLink;
 import de.boetzmeyer.systemmodel.SystemModel;
 
-public class SystemContext {
-	private static final int MAX_DEPTH = 100;
-	private static SystemContext singleton;
+public class SystemContext implements ISystemContext {
+	private static ISystemContext singleton;
 	
-	private final IServer systemAccess;
+	private final ApplicationService applicationService;
+	private final DataModelService dataModelService;
+	private final InfrastructureService infrastructureService;
+	private final InstallationService installationService;
+	private final SessionService sessionService;
 	
-	public static SystemContext aquire() {
+	public synchronized static ISystemContext aquire() {
+		if (singleton == null) {
+			throw new IllegalStateException("You are not connected to the system context. Please call one of the connect(...) methods before aquiring the context.");
+		}
 		return singleton;
 	}
 	
-	public static SystemContext connect(final String inServerName, final int inPort, final String inUser, final String inPassword, final String inDriverClass, final String inDriverProtocol) {
-		return new SystemContext(inServerName, inPort, inUser, inPassword, inDriverClass, inDriverProtocol);
+	public synchronized static ISystemContext connect(final String inServerName, final int inPort, final String inUser, final String inPassword, final String inDriverClass, final String inDriverProtocol) {
+		if (singleton == null) {
+			singleton = new SystemContext(inServerName, inPort, inUser, inPassword, inDriverClass, inDriverProtocol);
+		}
+		return singleton;
 	}
 	
-	public static SystemContext connect(final String inServerName, final int inPort, final String inUser, final String inPassword) {
-		return new SystemContext(inServerName, inPort, inUser, inPassword, null, null);
+	public synchronized static ISystemContext connect(final String inServerName, final int inPort, final String inUser, final String inPassword) {
+		if (singleton == null) {
+			singleton = new SystemContext(inServerName, inPort, inUser, inPassword, null, null);
+		}
+		return singleton;
 	}
 	
-	public static SystemContext connect(final String inServerName, final int inPort, final String inUser) {
-		return new SystemContext(inServerName, inPort, inUser, null, null, null);
+	public synchronized static ISystemContext connect(final String inServerName, final int inPort, final String inUser) {
+		if (singleton == null) {
+			singleton = new SystemContext(inServerName, inPort, inUser, null, null, null);
+		}
+		return singleton;
 	}
 	
-	public static SystemContext connect(final String inServerName, final int inPort) {
-		return new SystemContext(inServerName, inPort, null, null, null, null);
+	public synchronized static ISystemContext connect(final String inServerName, final int inPort) {
+		if (singleton == null) {
+			singleton = new SystemContext(inServerName, inPort, null, null, null, null);
+		}
+		return singleton;
 	}
 	
-	public static SystemContext connect(final String inPath) {
-		return new SystemContext(inPath);
+	public synchronized static ISystemContext connect(final String inPath) {
+		if (singleton == null) {
+			singleton = new SystemContext(inPath);
+		}
+		return singleton;
 	}
 	
 	private SystemContext(final String inPath) {
 		Settings.setLocaleDatabaseDir(inPath);
 		//Settings.setFileAccess(true);
-		systemAccess = ServerFactory.create();
+		final IServer systemAccess = ServerFactory.create();
+		applicationService = new ApplicationServiceImpl(systemAccess);
+		dataModelService = new DataModelServiceImpl(systemAccess);
+		infrastructureService = new InfrastructureServiceImpl(systemAccess);
+		installationService = new InstallationServiceImpl(systemAccess);
+		sessionService = new SessionServiceImpl(systemAccess);
 	}
 	
 	private SystemContext(final String inServerName, final int inPort, final String inUser, final String inPassword, final String inDriverClass, final String inDriverProtocol) {
@@ -89,932 +110,655 @@ public class SystemContext {
 		if (inDriverProtocol != null) {
 			Settings.setDriverProtocol(inDriverProtocol);
 		}
-		//Settings.setFileAccess(false);
-		systemAccess = ServerFactory.create();
+		//Settings.setFileAccess(false);  // TODO
+		final IServer systemAccess = ServerFactory.create();
+		applicationService = new ApplicationServiceImpl(systemAccess);
+		dataModelService = new DataModelServiceImpl(systemAccess);
+		infrastructureService = new InfrastructureServiceImpl(systemAccess);
+		installationService = new InstallationServiceImpl(systemAccess);
+		sessionService = new SessionServiceImpl(systemAccess);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addSystem(de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public SystemConfig addSystem(final SystemConfig inSystem) {
-		if ((inSystem != null) && inSystem.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addSystemConfig(inSystem);
-			model.save();
-			return inSystem;
-		}
-		return null;
+		return infrastructureService.addSystem(inSystem);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addApplicationType(de.boetzmeyer.systemmodel.ApplicationType)
+	 */
+	@Override
 	public ApplicationType addApplicationType(final ApplicationType inApplicationType) {
-		if ((inApplicationType != null) && inApplicationType.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addApplicationType(inApplicationType);
-			model.save();
-			return inApplicationType;
-		}
-		return null;
+		return applicationService.addApplicationType(inApplicationType);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#connectApps(de.boetzmeyer.systemmodel.ApplicationConfig, de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public ApplicationLink connectApps(final ApplicationConfig inSourceApplication, final ApplicationConfig inTargetApplication) {
-		if ((inSourceApplication != null) && inSourceApplication.isValid() && (inTargetApplication != null) && inTargetApplication.isValid()) {
-			final ApplicationConfig sourceApp = systemAccess.findByIDApplicationConfig(inSourceApplication.getPrimaryKey());
-			if (sourceApp != null) {
-				final ApplicationConfig targetApp = systemAccess.findByIDApplicationConfig(inTargetApplication.getPrimaryKey());
-				if (targetApp != null) {
-					ApplicationLink appLink = findAppLink(sourceApp, targetApp);
-					if (appLink == null) {
-						appLink = ApplicationLink.generate();
-						appLink.setSource(sourceApp.getPrimaryKey());
-						appLink.setDestination(targetApp.getPrimaryKey());
-						final SystemModel model = SystemModel.createEmpty();
-						model.addApplicationLink(appLink);
-						model.save();
-					}
-					return appLink;
-				}
-			}
-		}
-		return null;
+		return applicationService.connectApps(inSourceApplication, inTargetApplication);
 	}
 	
-	public boolean disonnectApps(final ApplicationConfig inSourceApp, final ApplicationConfig inTargetApp) {
-		if ((inSourceApp != null) && inSourceApp.isValid() && (inTargetApp != null) && inTargetApp.isValid()) {
-			ApplicationLink appLink = findAppLink(inSourceApp, inTargetApp);
-			if (appLink != null) {
-				return systemAccess.deleteApplicationLink(appLink.getPrimaryKey());
-			}
-		}
-		return true;
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#disonnectApps(de.boetzmeyer.systemmodel.ApplicationConfig, de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
+	public boolean disconnectApps(final ApplicationConfig inSourceApp, final ApplicationConfig inTargetApp) {
+		return applicationService.disconnectApps(inSourceApp, inTargetApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findAppLink(de.boetzmeyer.systemmodel.ApplicationConfig, de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public ApplicationLink findAppLink(final ApplicationConfig inSourceApplication, final ApplicationConfig inTargetApplication) {
-		final List<ApplicationLink> targetApps = systemAccess.referencesApplicationLinkBySource(inSourceApplication.getPrimaryKey());
-		for (ApplicationLink appLink : targetApps) {
-			if (appLink != null) {
-				if (appLink.getDestination() == inTargetApplication.getPrimaryKey()) {
-					return appLink;
-				}
-			}
-		}
-		return null;
+		return applicationService.findAppLink(inSourceApplication, inTargetApplication);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInfrastructure(de.boetzmeyer.systemmodel.Infrastructure)
+	 */
+	@Override
 	public Infrastructure addInfrastructure(final Infrastructure inInfrastructure) {
-		if ((inInfrastructure != null) && inInfrastructure.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addInfrastructure(inInfrastructure);
-			model.save();
-			return inInfrastructure;
-		}
-		return null;
+		return infrastructureService.addInfrastructure(inInfrastructure);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#connectSystems(de.boetzmeyer.systemmodel.SystemConfig, de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public SystemLink connectSystems(final SystemConfig inSourceSystem, final SystemConfig inTargetSystem) {
-		if ((inSourceSystem != null) && inSourceSystem.isValid() && (inTargetSystem != null) && inTargetSystem.isValid()) {
-			SystemLink systemLink = findSystemLink(inSourceSystem, inTargetSystem);
-			if (systemLink == null) {
-				systemLink = SystemLink.generate();
-				systemLink.setSource(inSourceSystem.getPrimaryKey());
-				systemLink.setDestination(inTargetSystem.getPrimaryKey());
-				final SystemModel model = SystemModel.createEmpty();
-				model.addSystemLink(systemLink);
-				model.save();
-			}
-			return systemLink;
-		}
-		return null;
+		return infrastructureService.connectSystems(inSourceSystem, inTargetSystem);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#disonnectSystems(de.boetzmeyer.systemmodel.SystemConfig, de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public boolean disonnectSystems(final SystemConfig inSourceSystem, final SystemConfig inTargetSystem) {
-		if ((inSourceSystem != null) && inSourceSystem.isValid() && (inTargetSystem != null) && inTargetSystem.isValid()) {
-			SystemLink systemLink = findSystemLink(inSourceSystem, inTargetSystem);
-			if (systemLink != null) {
-				return systemAccess.deleteSystemLink(systemLink.getPrimaryKey());
-			}
-		}
-		return true;
+		return infrastructureService.disonnectSystems(inSourceSystem, inTargetSystem);
 	}
 	
-	private SystemLink findSystemLink(final SystemConfig inSourceSystem, final SystemConfig inTargetSystem) {
-		if ((inSourceSystem != null) && (inTargetSystem != null)) {
-			final List<SystemLink> targetLinks = systemAccess.referencesSystemLinkBySource(inSourceSystem.getPrimaryKey());
-			for (SystemLink systemLink : targetLinks) {
-				if (systemLink != null) {
-					if (systemLink.getDestination() == inTargetSystem.getPrimaryKey()) {
-						return systemLink;
-					}
-				}
-			}
-		}
-		return null;
-	}
-	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#installDatabase(de.boetzmeyer.systemmodel.DataModel, de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public DatabaseInstallation installDatabase(final DataModel inDataModel, final Computer inComputer) {
-		if ((inComputer != null) && (inDataModel != null)) {
-			final DataModel dataModel = findDataModel(inDataModel);
-			if (dataModel != null) {
-				final Computer computer = findComputer(inComputer);
-				if (computer != null) {
-					DatabaseInstallation dbInstallation = findDatabaseInstallation(dataModel, computer);
-					if (dbInstallation == null) {
-						dbInstallation = DatabaseInstallation.generate();
-						dbInstallation.setDataModel(dataModel.getPrimaryKey());
-						dbInstallation.setComputer(computer.getPrimaryKey());
-						dbInstallation.save();
-					}
-					return dbInstallation;
-				}
-			}
-		}
-		return null;
+		return installationService.installDatabase(inDataModel, inComputer);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findDatabaseInstallation(de.boetzmeyer.systemmodel.DataModel, de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public DatabaseInstallation findDatabaseInstallation(final DataModel inDataModel, final Computer inComputer) {
-		if ((inComputer != null) && (inDataModel != null)) {
-			final List<DatabaseInstallation> dbInstallations = systemAccess.referencesDatabaseInstallationByDataModel(inDataModel.getPrimaryKey());
-			for (DatabaseInstallation dbInstallation : dbInstallations) {
-				if (dbInstallation != null) {
-					if (dbInstallation.getComputer() == inComputer.getPrimaryKey()) {
-						return dbInstallation;
-					}
-				}
-			}
-		}
-		return null;
+		return installationService.findDatabaseInstallation(inDataModel, inComputer);
 	}
 
-	private DataModel findDataModel(final DataModel inDataModel) {
-		if (inDataModel != null) {
-			return systemAccess.findByIDDataModel(inDataModel.getPrimaryKey());
-		}
-		return null;
-	}
-
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.InterfaceMethod)
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final InterfaceMethod inInterfaceMethod) {
-		if ((inInterfaceMethod != null) && inInterfaceMethod.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addInterfaceMethod(inInterfaceMethod);
-			model.save();
-			return inInterfaceMethod;
-		}
-		return null;
+		return applicationService.addInterfaceMethod(inInterfaceMethod);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceDataType(de.boetzmeyer.systemmodel.InterfaceDataType)
+	 */
+	@Override
 	public InterfaceDataType addInterfaceDataType(final InterfaceDataType inInterfaceDataType) {
-		if ((inInterfaceDataType != null) && inInterfaceDataType.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addInterfaceDataType(inInterfaceDataType);
-			model.save();
-			return inInterfaceDataType;
-		}
-		return null;
+		return applicationService.addInterfaceDataType(inInterfaceDataType);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addMethodParameter(de.boetzmeyer.systemmodel.InterfaceMethodParameter)
+	 */
+	@Override
 	public InterfaceMethodParameter addMethodParameter(final InterfaceMethodParameter inInterfaceMethodParameter) {
-		if ((inInterfaceMethodParameter != null) && inInterfaceMethodParameter.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addInterfaceMethodParameter(inInterfaceMethodParameter);
-			model.save();
-			return inInterfaceMethodParameter;
-		}
-		return null;
+		return applicationService.addMethodParameter(inInterfaceMethodParameter);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addAppInterface(de.boetzmeyer.systemmodel.ApplicationInterface)
+	 */
+	@Override
 	public ApplicationInterface addAppInterface(final ApplicationInterface inAppInterface) {
-		if ((inAppInterface != null) && inAppInterface.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addApplicationInterface(inAppInterface);
-			model.save();
-			return inAppInterface;
-		}
-		return null;
+		return applicationService.addAppInterface(inAppInterface);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addApp(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public ApplicationConfig addApp(final ApplicationConfig inApp) {
-		if ((inApp != null) && inApp.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addApplicationConfig(inApp);
-			model.save();
-			return inApp;
-		}
-		return null;
+		return applicationService.addApp(inApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addDataModel(de.boetzmeyer.systemmodel.DataModel)
+	 */
+	@Override
 	public DataModel addDataModel(final DataModel inDataModel) {
-		if ((inDataModel != null) && inDataModel.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addDataModel(inDataModel);
-			model.save();
-			return inDataModel;
-		}
-		return null;
+		return dataModelService.addDataModel(inDataModel);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addModelAttribute(de.boetzmeyer.systemmodel.ModelAttribute)
+	 */
+	@Override
 	public ModelAttribute addModelAttribute(final ModelAttribute inModelAttribute) {
-		if ((inModelAttribute != null) && inModelAttribute.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addModelAttribute(inModelAttribute);
-			model.save();
-			return inModelAttribute;
-		}
-		return null;
+		return dataModelService.addModelAttribute(inModelAttribute);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addModelReference(de.boetzmeyer.systemmodel.ModelReference)
+	 */
+	@Override
 	public ModelReference addModelReference(final ModelReference inModelReference) {
-		if ((inModelReference != null) && inModelReference.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addModelReference(inModelReference);
-			model.save();
-			return inModelReference;
-		}
-		return null;
+		return dataModelService.addModelReference(inModelReference);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addModelDataType(de.boetzmeyer.systemmodel.ModelDataType)
+	 */
+	@Override
 	public ModelDataType addModelDataType(final ModelDataType inModelDataType) {
-		if ((inModelDataType != null) && inModelDataType.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addModelDataType(inModelDataType);
-			model.save();
-			return inModelDataType;
-		}
-		return null;
+		return dataModelService.addModelDataType(inModelDataType);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addModelEntity(de.boetzmeyer.systemmodel.ModelEntity)
+	 */
+	@Override
 	public ModelEntity addModelEntity(final ModelEntity inModelEntity) {
-		if ((inModelEntity != null) && inModelEntity.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addModelEntity(inModelEntity);
-			model.save();
-			return inModelEntity;
-		}
-		return null;
+		return dataModelService.addModelEntity(inModelEntity);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addComputer(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public Computer addComputer(final Computer inComputer) {
-		if ((inComputer != null) && inComputer.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addComputer(inComputer);
-			model.save();
-			return inComputer;
-		}
-		return null;
+		return infrastructureService.addComputer(inComputer);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addNetwork(de.boetzmeyer.systemmodel.Network)
+	 */
+	@Override
 	public Network addNetwork(final Network inNetwork) {
-		if ((inNetwork != null) && inNetwork.isValid()) {
-			final SystemModel model = SystemModel.createEmpty();
-			model.addNetwork(inNetwork);
-			model.save();
-			return inNetwork;
-		}
-		return null;
+		return infrastructureService.addNetwork(inNetwork);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemByName(java.lang.String)
+	 */
+	@Override
 	public SystemConfig getSystemByName(final String inSystemName) {
-		final List<SystemConfig> configs = systemAccess.listSystemConfig();
-		for (SystemConfig systemConfig : configs) {
-			if (inSystemName.equalsIgnoreCase(systemConfig.getSystemName())) {
-				return systemConfig;
-			}
-		}
-		return null;
+		return infrastructureService.getSystemByName(inSystemName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemApplications(java.lang.String)
+	 */
+	@Override
 	public List<ApplicationConfig> getSystemApplications(final String inSystemName) {
-		final SystemConfig systemX = getSystemByName(inSystemName);
-		if (systemX != null) {
-			return systemAccess.referencesApplicationConfigBySystemConfig(systemX.getPrimaryKey());
-		}
-		return new ArrayList<ApplicationConfig>();
+		return applicationService.getSystemApplications(inSystemName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApplication(java.lang.String, java.lang.String)
+	 */
+	@Override
 	public ApplicationConfig getApplication(final String inSystemName, final String inApplicationName) {
-		final SystemConfig systemX = getSystemByName(inSystemName);
-		if (systemX != null) {
-			final List<ApplicationConfig> applications = systemAccess.referencesApplicationConfigBySystemConfig(systemX.getPrimaryKey());
-			for (ApplicationConfig applicationConfig : applications) {
-				if (inApplicationName.equalsIgnoreCase(applicationConfig.getApplicationName())) {
-					return applicationConfig;
-				}
-			}
-		}
-		return null;
+		return applicationService.getApplication(inSystemName, inApplicationName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#login(de.boetzmeyer.systemmodel.DatabaseInstallation)
+	 */
+	@Override
 	public DatabaseSession login(final DatabaseInstallation inDatabaseInstallation) {
-		if (inDatabaseInstallation != null) {
-			final DatabaseSession databaseSession = DatabaseSession.generate();
-			databaseSession.setDatabaseInstallation(inDatabaseInstallation.getPrimaryKey());
-			final Date now = new Date();
-			databaseSession.setFromDate(now);
-			databaseSession.setToDate(new Date(now.getTime()));
-			databaseSession.save();
-			return databaseSession;
-		}
-		return null;
+		return sessionService.login(inDatabaseInstallation);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#logout(de.boetzmeyer.systemmodel.DatabaseSession)
+	 */
+	@Override
 	public boolean logout(final DatabaseSession inDatabaseSession) {
-		if (inDatabaseSession != null) {
-			final DatabaseSession foundSession = systemAccess.findByIDDatabaseSession(inDatabaseSession.getPrimaryKey());
-			if (foundSession != null) {
-				foundSession.setToDate(new Date());
-				foundSession.save();
-				return true;
-			}			
-		}
-		return false;
+		return sessionService.logout(inDatabaseSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#login(de.boetzmeyer.systemmodel.ApplicationInstallation)
+	 */
+	@Override
 	public ApplicationSession login(final ApplicationInstallation inApplicationInstallation) {
-		if (inApplicationInstallation != null) {
-			final ApplicationSession applicationSession = ApplicationSession.generate();
-			applicationSession.setApplicationInstallation(inApplicationInstallation.getPrimaryKey());
-			final Date now = new Date();
-			applicationSession.setFromDate(now);
-			applicationSession.setToDate(new Date(now.getTime()));
-			applicationSession.save();
-			return applicationSession;
-		}
-		return null;
+		return sessionService.login(inApplicationInstallation);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#logout(de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public boolean logout(final ApplicationSession inApplicationSession) {
-		if (inApplicationSession != null) {
-			final ApplicationSession foundSession = systemAccess.findByIDApplicationSession(inApplicationSession.getPrimaryKey());
-			if (foundSession != null) {
-				foundSession.setToDate(new Date());
-				foundSession.save();
-				return true;
-			}			
-		}
-		return false;
+		return sessionService.logout(inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInstallations(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public List<ApplicationInstallation> getAppInstallations(final ApplicationConfig inApplicationConfig) {
-		return systemAccess.referencesApplicationInstallationByApplicationConfig(inApplicationConfig.getPrimaryKey());
+		return installationService.getAppInstallations(inApplicationConfig);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSessions(de.boetzmeyer.systemmodel.ApplicationInstallation)
+	 */
+	@Override
 	public List<ApplicationSession> getSessions(final ApplicationInstallation inApplicationInstallation) {
-		return systemAccess.referencesApplicationSessionByApplicationInstallation(inApplicationInstallation.getPrimaryKey());
+		return sessionService.getSessions(inApplicationInstallation);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSessionStates(de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public List<SessionState> getSessionStates(final ApplicationSession inApplicationSession) {
-		return systemAccess.referencesSessionStateByApplicationSession(inApplicationSession.getPrimaryKey());
+		return sessionService.getSessionStates(inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getStates(de.boetzmeyer.systemmodel.SessionState)
+	 */
+	@Override
 	public List<PropertyState> getStates(final SessionState inSessionState) {
-		return systemAccess.referencesPropertyStateBySessionState(inSessionState.getPrimaryKey());
+		return sessionService.getStates(inSessionState);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#updatePropertyState(java.lang.String, java.lang.String, de.boetzmeyer.systemmodel.ConfigurationItem, de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public boolean updatePropertyState(final String inPropertyKey, final String inPropertyValue, final ConfigurationItem inConfigurationItem, final ApplicationSession inApplicationSession) {
-		List<PropertyState> propertyStates = getConfigurationItemState(inConfigurationItem, inApplicationSession);
-		for (PropertyState propertyState : propertyStates) {
-			if (propertyState != null) {
-				if (propertyState.getPropertyKey().equalsIgnoreCase(inPropertyKey)) {
-					propertyState.setPropertyValue(inPropertyValue);
-					propertyState.setLastUpdated(new Date());
-					return propertyState.save();
-				}
-			}
-		}
-		final PropertyState propertyState = PropertyState.generate();
-		propertyState.setPropertyKey(inPropertyKey);
-		propertyState.setPropertyValue(inPropertyValue);
-		propertyState.setLastUpdated(new Date());
-		return propertyState.save();
+		return sessionService.updatePropertyState(inPropertyKey, inPropertyValue, inConfigurationItem, inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getPropertyState(java.lang.String, de.boetzmeyer.systemmodel.ConfigurationItem, de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public Object getPropertyState(final String inPropertyKey, final ConfigurationItem inConfigurationItem, final ApplicationSession inApplicationSession) {
-		final Map<String, String> itemState = getItemState(inConfigurationItem, inApplicationSession);
-		return itemState.get(inPropertyKey);
+		return sessionService.getPropertyState(inPropertyKey, inConfigurationItem, inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getItemState(de.boetzmeyer.systemmodel.ConfigurationItem, de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public Map<String, String> getItemState(final ConfigurationItem inConfigurationItem, final ApplicationSession inApplicationSession) {
-		final Map<String, String> itemState = new HashMap<String, String>();
-		final List<PropertyState> propertyStates = getConfigurationItemState(inConfigurationItem, inApplicationSession);
-		for (PropertyState propertyState : propertyStates) {
-			if (propertyState != null) {
-				itemState.put(propertyState.getPropertyKey(), propertyState.getPropertyValue());
-			}
-		}
-		return itemState;
+		return sessionService.getItemState(inConfigurationItem, inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getConfigurationItemState(de.boetzmeyer.systemmodel.ConfigurationItem, de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public List<PropertyState> getConfigurationItemState(final ConfigurationItem inConfigurationItem, final ApplicationSession inApplicationSession) {
-		final List<SessionState> sessionStates = getSessionStates(inApplicationSession);
-		for (SessionState sessionState : sessionStates) {
-			if (sessionState != null) {
-				if (sessionState.getConfigurationItem() == inConfigurationItem.getPrimaryKey()) {
-					return systemAccess.referencesPropertyStateBySessionState(sessionState.getPrimaryKey());
-				}
-			}
-		}
-		return new ArrayList<PropertyState>();
+		return sessionService.getConfigurationItemState(inConfigurationItem, inApplicationSession);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findRootItem(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public ConfigurationItem findRootItem(final ApplicationConfig inApp) {
-		ConfigurationItem root = null;
-		if (inApp != null) {
-			final List<ConfigurationItem> items = systemAccess.referencesConfigurationItemByApplicationConfig(inApp.getPrimaryKey());
-			if (items.size() > 0) {
-				final AtomicInteger recursionCounter = new AtomicInteger(0);
-				ConfigurationItem item = items.get(0);
-				while (item != null) {
-					root = item;
-					recursionCounter.incrementAndGet();
-					if (recursionCounter.get() >= MAX_DEPTH) {
-						break;
-					}
-					final List<ConfigurationItemLink> inputLinks = systemAccess.referencesConfigurationItemLinkByDestination(item.getPrimaryKey());
-					if (inputLinks.size() > 0) {
-						final ConfigurationItemLink link = inputLinks.get(0);
-						if (link != null) {
-							item = link.getSourceRef();
-						}
-					}
-				}
-			}
-		}
-		return root;
+		return applicationService.findRootItem(inApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppConfiguration(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public Map<String, String> getAppConfiguration(final ApplicationConfig inApp) {
-		final ConfigurationItem rootItem = findRootItem(inApp);
-		return getConfigurations(rootItem);
+		return applicationService.getAppConfiguration(inApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getConfigurations(de.boetzmeyer.systemmodel.ConfigurationItem)
+	 */
+	@Override
 	public Map<String, String> getConfigurations(final ConfigurationItem inConfigurationItem) {
-		Map<String, String> config = new HashMap<String, String>();
-		final String rootPathKey = getRootPathKey(inConfigurationItem);
-		addItem(config, inConfigurationItem, rootPathKey);
-		return config;
+		return applicationService.getConfigurations(inConfigurationItem);
 	}
 	
-	private String getRootPathKey(final ConfigurationItem inConfigurationItem) {
-		if (inConfigurationItem != null) {
-			final StringBuilder path = new StringBuilder();
-			addPath(path, inConfigurationItem);			
-		}
-		return null;
-	}
-
-	private void addPath(final StringBuilder inPath, final ConfigurationItem inConfigurationItem) {
-		if (inConfigurationItem != null) {
-			inPath.insert(0, String.format("%s.", inConfigurationItem.getItemKey()));
-			final List<ConfigurationItemLink> parentLinks = systemAccess.referencesConfigurationItemLinkByDestination(inConfigurationItem.getPrimaryKey());
-			if (parentLinks.size() >= 1) {
-				for (ConfigurationItemLink configurationItemLink : parentLinks) {
-					final ConfigurationItem parent = configurationItemLink.getSourceRef();
-					if (parent != null) {
-						addPath(inPath, parent);
-					}
-				}
-			}
-		}
-	}
-
-	private void addItem(final Map<String, String> inConfig, final ConfigurationItem inConfigurationItem, final String inPathKey) {
-		if (inConfigurationItem != null) {
-			final String newPathKey;
-			if (inPathKey == null) {
-				newPathKey = inConfigurationItem.getItemKey();
-			} else {
-				newPathKey = String.format("%s.%s", inPathKey, inConfigurationItem.getItemKey());
-			}
-			inConfig.put(newPathKey, inConfigurationItem.getItemValue());
-			final List<ConfigurationItemLink> childLinks = systemAccess.referencesConfigurationItemLinkBySource(inConfigurationItem.getPrimaryKey());
-			for (ConfigurationItemLink configurationItemLink : childLinks) {
-				final ConfigurationItem child = configurationItemLink.getDestinationRef();
-				if (child != null) {
-					addItem(inConfig, child, newPathKey);
-				}
-			}
-		}
-	}
-	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getConfigurationItems(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public List<ConfigurationItem> getConfigurationItems(final ApplicationConfig inApplicationConfig) {
-		return systemAccess.referencesConfigurationItemByApplicationConfig(inApplicationConfig.getPrimaryKey());
+		return applicationService.getConfigurationItems(inApplicationConfig);
 	}
 	
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getNetworks()
+	 */
+	@Override
 	public List<Network> getNetworks() {
-		return systemAccess.listNetwork();
+		return infrastructureService.getNetworks();
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps(java.lang.String)
+	 */
+	@Override
 	public List<ApplicationConfig> getApps(final String inApplicationType) {
-		return getApps();
+		return applicationService.getApps(inApplicationType);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputers()
+	 */
+	@Override
 	public List<Computer> getComputers() {
-		return systemAccess.listComputer();
+		return infrastructureService.getComputers();
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getInfrastructures()
+	 */
+	@Override
 	public List<Infrastructure> getInfrastructures() {
-		return systemAccess.listInfrastructure();
+		return infrastructureService.getInfrastructures();
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemInfrastructure(java.lang.String)
+	 */
+	@Override
 	public SystemModel getSystemInfrastructure(final String inInfrastructureName) {
-		if (inInfrastructureName != null) {
-			final List<Infrastructure> infrastructures = getInfrastructures();
-			for (Infrastructure infrastructure : infrastructures) {
-				if (inInfrastructureName.equalsIgnoreCase(infrastructure.getInfrastructureName())) {
-					return getSystemInfrastructure(infrastructure);
-				}
-			}
-		}
-		return SystemModel.createEmpty();
+		return infrastructureService.getSystemInfrastructure(inInfrastructureName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppSystem(java.lang.String)
+	 */
+	@Override
 	public SystemModel getAppSystem(final String inSystemName) {
-		final SystemConfig system = findSystemByName(inSystemName);
-		return getAppSystem(system);
-	}
-	
-	private SystemConfig findSystemByName(final String inSystemName) {
-		if (inSystemName != null) {
-			final List<SystemConfig> systems = getSystems();
-			for (SystemConfig system : systems) {
-				if (system != null) {
-					if (inSystemName.equalsIgnoreCase(system.getSystemName())) {
-						return system;
-					}
-				}
-			}
-		}
-		return null;
+		return infrastructureService.getAppSystem(inSystemName);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemInfrastructure(de.boetzmeyer.systemmodel.Infrastructure)
+	 */
+	@Override
 	public SystemModel getSystemInfrastructure(final Infrastructure inInfrastructure) {
-		if (inInfrastructure != null) {
-			final List<SystemConfig> infrastructureSystems = getSystems(inInfrastructure);
-			return systemAccess.contextExportSystemConfig(infrastructureSystems);
-		}
-		return SystemModel.createEmpty();
+		return infrastructureService.getSystemInfrastructure(inInfrastructure);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppSystem(de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public SystemModel getAppSystem(final SystemConfig inSystem) {
-		if (inSystem != null) {
-			final List<ApplicationConfig> systemApps = getApps(inSystem);
-			return systemAccess.contextExportApplicationConfig(systemApps);
-		}
-		return SystemModel.createEmpty();
+		return infrastructureService.getAppSystem(inSystem);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystems()
+	 */
+	@Override
 	public List<SystemConfig> getSystems() {
-		return systemAccess.listSystemConfig();
+		return infrastructureService.getSystems();
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystems(de.boetzmeyer.systemmodel.Infrastructure)
+	 */
+	@Override
 	public List<SystemConfig> getSystems(final Infrastructure inInfrastructure) {
-		if (inInfrastructure != null) {
-			return systemAccess.referencesSystemConfigByInfrastructure(inInfrastructure.getPrimaryKey());
-		}
-		return new ArrayList<SystemConfig>();
+		return infrastructureService.getSystems(inInfrastructure);
 	}
 		
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps(de.boetzmeyer.systemmodel.Infrastructure)
+	 */
+	@Override
 	public List<ApplicationConfig> getApps(final Infrastructure inInfrastructure) {
-		final List<ApplicationConfig> apps = new ArrayList<ApplicationConfig>();
-		if (inInfrastructure != null) {
-			final List<SystemConfig> systems = getSystems(inInfrastructure);
-			for (SystemConfig system : systems) {
-				apps.addAll(getApps(system));
-			}
-		}
-		return apps;
+		return applicationService.getApps(inInfrastructure);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps(de.boetzmeyer.systemmodel.ApplicationType)
+	 */
+	@Override
 	public List<ApplicationConfig> getApps(final ApplicationType inApplicationType) {
-		if (inApplicationType != null) {
-			return systemAccess.referencesApplicationConfigByApplicationType(inApplicationType.getPrimaryKey());
-		}
-		return new ArrayList<ApplicationConfig>();
+		return applicationService.getApps(inApplicationType);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps()
+	 */
+	@Override
 	public List<ApplicationConfig> getApps() {
-		return systemAccess.listApplicationConfig();
+		return applicationService.getApps();
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps(de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public List<ApplicationConfig> getApps(final SystemConfig inSystem) {
-		if (inSystem != null) {
-			return systemAccess.referencesApplicationConfigBySystemConfig(inSystem.getPrimaryKey());
-		}
-		return new ArrayList<ApplicationConfig>();
+		return applicationService.getApps(inSystem);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getApps(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public List<ApplicationConfig> getApps(final Computer inComputer) {
-		final List<ApplicationConfig> apps = new ArrayList<ApplicationConfig>();
-		if (inComputer != null) {
-			final List<ApplicationInstallation> installations = systemAccess.referencesApplicationInstallationByComputer(inComputer.getPrimaryKey());
-			for (ApplicationInstallation installation : installations) {
-				final ApplicationConfig app = installation.getApplicationConfigRef();
-				if (app != null) {
-					apps.add(app);
-				}
-			}
-		}
-		return apps;
+		return applicationService.getApps(inComputer);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findNetwork(java.lang.String)
+	 */
+	@Override
 	public Network findNetwork(final String inNetworkName) {
-		final List<Network> networks = getNetworks();
-		for (Network network : networks) {
-			if (inNetworkName.equalsIgnoreCase(network.getNetworkName())) {
-				return network;
-			}
-		}
-		return null;
+		return infrastructureService.findNetwork(inNetworkName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputers(java.lang.String)
+	 */
+	@Override
 	public List<Computer> getComputers(final String inNetworkName) {
-		final Network network = findNetwork(inNetworkName);
-		return getComputers(network);
+		return infrastructureService.getComputers(inNetworkName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputers(de.boetzmeyer.systemmodel.Network)
+	 */
+	@Override
 	public List<Computer> getComputers(final Network inNetwork) {
-		if (inNetwork != null) {
-			return systemAccess.referencesComputerByNetwork(inNetwork.getPrimaryKey());
-		}
-		return new ArrayList<Computer>();
+		return infrastructureService.getComputers(inNetwork);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getInstallations(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public List<ApplicationInstallation> getInstallations(final Computer inComputer) {
-		if (inComputer != null) {
-			return systemAccess.referencesApplicationInstallationByComputer(inComputer.getPrimaryKey());
-		}
-		return new ArrayList<ApplicationInstallation>();
+		return installationService.getInstallations(inComputer);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#installApp(java.lang.String, java.lang.String)
+	 */
+	@Override
 	public ApplicationInstallation installApp(final String inComputerName, final String inApplicationName) {
-		final Computer computer = findComputer(inComputerName);
-		if ((computer != null) && (inApplicationName != null)) {
-			final ApplicationConfig app = findAppByName(inApplicationName);
-			if (app != null) {
-				if (computer != null) {
-					ApplicationInstallation applicationInstallation = findInstallation(computer, app);
-					if (applicationInstallation == null) {
-						applicationInstallation = ApplicationInstallation.generate();
-						applicationInstallation.setApplicationConfig(app.getPrimaryKey());
-						applicationInstallation.setComputer(computer.getPrimaryKey());
-					} else {
-						applicationInstallation.setInstallationDate(new Date());
-					}
-					applicationInstallation.save();
-					return applicationInstallation;
-				}
-			}
-		}
-		return null;
-	}
-	
-	private ApplicationInstallation findInstallation(final Computer inComputer, final ApplicationConfig inApp) {
-		if (inApp != null) {
-			List<ApplicationInstallation> computerInstallations = getInstallations(inComputer);
-			for (ApplicationInstallation installation : computerInstallations) {
-				if (inApp.getPrimaryKey() == installation.getApplicationConfig()) {
-					return installation;
-				}
-			}
-		}
-		return null;
+		return installationService.installApp(inComputerName, inApplicationName);
 	}
 
-	private Computer findComputer(final String inComputer) {
-		final List<Computer> computers = getComputers();
-		for (Computer computer : computers) {
-			if (inComputer.equalsIgnoreCase(computer.getComputerName())) {
-				return computer;
-			}
-		}
-		for (Computer computer : computers) {
-			if (inComputer.equalsIgnoreCase(computer.getIPAddress())) {
-				return computer;
-			}
-		}
-		return null;
-	}
-
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#installApp(de.boetzmeyer.systemmodel.Computer, de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public ApplicationInstallation installApp(final Computer inComputer, final ApplicationConfig inApplication) {
-		if ((inComputer != null) && (inApplication != null)) {
-			final ApplicationConfig app = findAppByName(inApplication.getApplicationName());
-			if (app != null) {
-				final Computer computer = findComputer(inComputer);
-				if (computer != null) {
-					final ApplicationInstallation applicationInstallation = ApplicationInstallation.generate();
-					applicationInstallation.setApplicationConfig(app.getPrimaryKey());
-					applicationInstallation.setComputer(computer.getPrimaryKey());
-					applicationInstallation.save();
-					return applicationInstallation;
-				}
-			}
-		}
-		return null;
+		return installationService.installApp(inComputer, inApplication);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#uninstallApp(de.boetzmeyer.systemmodel.ApplicationInstallation)
+	 */
+	@Override
 	public void uninstallApp(final ApplicationInstallation inApplicationInstallation) {
-		if (inApplicationInstallation != null) {
-			final List<ApplicationSession> appSessions = systemAccess.referencesApplicationSessionByApplicationInstallation(inApplicationInstallation.getPrimaryKey());
-			for (ApplicationSession appSession : appSessions) {
-				final List<SessionState> sessionStates = systemAccess.referencesSessionStateByApplicationSession(appSession.getPrimaryKey());
-				for (SessionState sessionState : sessionStates) {
-					final List<PropertyState> propertyStates = systemAccess.referencesPropertyStateBySessionState(sessionState.getPrimaryKey());
-					for (PropertyState propertyState : propertyStates) {
-						systemAccess.deletePropertyState(propertyState.getPrimaryKey());
-					}
-					systemAccess.deleteSessionState(sessionState.getPrimaryKey());
-				}
-				systemAccess.deleteApplicationSession(appSession.getPrimaryKey());
-			}
-			systemAccess.deleteApplicationInstallation(inApplicationInstallation.getPrimaryKey());
-		}
+		installationService.uninstallApp(inApplicationInstallation);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#uninstallDatabase(de.boetzmeyer.systemmodel.DatabaseInstallation)
+	 */
+	@Override
 	public void uninstallDatabase(final DatabaseInstallation inDatabaseInstallation) {
-		if (inDatabaseInstallation != null) {
-			final List<DatabaseSession> dbSessions = systemAccess.referencesDatabaseSessionByDatabaseInstallation(inDatabaseInstallation.getPrimaryKey());
-			for (DatabaseSession dbSession : dbSessions) {
-				systemAccess.deleteDatabaseSession(dbSession.getPrimaryKey());
-			}
-			systemAccess.deleteDatabaseInstallation(inDatabaseInstallation.getPrimaryKey());
-		}
+		installationService.uninstallDatabase(inDatabaseInstallation);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findComputer(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public Computer findComputer(final Computer inComputer) {
-		if (inComputer != null) {
-			return systemAccess.findByIDComputer(inComputer.getPrimaryKey());
-		}
-		return null;
+		return infrastructureService.findComputer(inComputer);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#findAppByName(java.lang.String)
+	 */
+	@Override
 	public ApplicationConfig findAppByName(final String inApplicationName) {
-		final List<ApplicationConfig> apps = systemAccess.listApplicationConfig();
-		for (ApplicationConfig app : apps) {
-			if (inApplicationName.equalsIgnoreCase(app.getApplicationName())) {
-				return app;
-			}
-		}
-		return null;
+		return applicationService.findAppByName(inApplicationName);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getInstallationsSince(de.boetzmeyer.systemmodel.Computer, java.util.Date)
+	 */
+	@Override
 	public List<ApplicationInstallation> getInstallationsSince(final Computer inComputer, final Date inSince) {
-		if (inComputer != null) {
-			final List<ApplicationInstallation> installations = systemAccess.referencesApplicationInstallationByComputer(inComputer.getPrimaryKey());
-			if (inSince != null) {
-				final List<ApplicationInstallation> latestInstallations = new ArrayList<ApplicationInstallation>();
-				for (ApplicationInstallation applicationInstallation : installations) {
-					if (applicationInstallation != null) {
-						if (inSince.before(applicationInstallation.getInstallationDate())) {
-							latestInstallations.add(applicationInstallation);
-						}
-					}
-				}
-				return latestInstallations;
-			} else {
-				return installations;
-			}
-		}
-		return new ArrayList<ApplicationInstallation>();
+		return installationService.getInstallationsSince(inComputer, inSince);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getRunningApps(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public List<ApplicationSession> getRunningApps(final Computer inComputer) {
-		final List<ApplicationInstallation> installations = getInstallations(inComputer);
-		final List<ApplicationSession> runningSessions = new ArrayList<ApplicationSession>();
-		final Date now = new Date();
-		for (ApplicationInstallation installation : installations) {
-			final List<ApplicationSession> sessions = systemAccess.referencesApplicationSessionByApplicationInstallation(installation.getPrimaryKey());
-			for (ApplicationSession session : sessions) {
-				if ((now.after(session.getFromDate()))) {
-					if (session.getFromDate() == session.getToDate()) {
-						runningSessions.add(session);
-					}
-				}
-			}
-		}
-		return runningSessions;
+		return sessionService.getRunningApps(inComputer);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInterface(de.boetzmeyer.systemmodel.ApplicationInterface)
+	 */
+	@Override
 	public List<InterfaceMethod> getAppInterface(final ApplicationInterface inApplicationInterface) {
-		if (inApplicationInterface != null) {
-			return systemAccess.referencesInterfaceMethodByApplicationInterface(inApplicationInterface.getPrimaryKey());
-		}
-		return new ArrayList<InterfaceMethod>();
+		return applicationService.getAppInterface(inApplicationInterface);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getDataModels(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public List<DataModel> getDataModels(final ApplicationConfig inApp) {
-		final List<DataModel> dataModels = new ArrayList<DataModel>();
-		if (inApp != null) {
-			final List<ApplicationDataModel> appModels = systemAccess.referencesApplicationDataModelByApplicationConfig(inApp.getPrimaryKey());
-			for (ApplicationDataModel appModel : appModels) {
-				if (appModel != null) {
-					final DataModel dataModel = appModel.getDataModelRef();
-					if (dataModel != null) {
-						dataModels.add(dataModel);
-					}
-				}
-			}
-		}
-		return dataModels;
+		return dataModelService.getDataModels(inApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputers(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public List<Computer> getComputers(final ApplicationConfig inApp) {
-		final List<Computer> computers = new ArrayList<Computer>();
-		if (inApp != null) {
-			final List<ApplicationInstallation> installations = getAppInstallations(inApp);
-			for (ApplicationInstallation installation : installations) {
-				final Computer computer = installation.getComputerRef();
-				if (computer != null) {
-					computers.add(computer);
-				}
-			}
-		}
-		return computers;
+		return infrastructureService.getComputers(inApp);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputers(de.boetzmeyer.systemmodel.DataModel)
+	 */
+	@Override
 	public List<Computer> getComputers(final DataModel inDataModel) {
-		final List<Computer> computers = new ArrayList<Computer>();
-		if (inDataModel != null) {
-			final List<DatabaseInstallation> installations = getInstallations(inDataModel);
-			for (DatabaseInstallation databaseInstallation : installations) {
-				final Computer computer = databaseInstallation.getComputerRef();
-				if (computer != null) {
-					computers.add(computer);
-				}
-			}
-		}
-		return computers;
+		return infrastructureService.getComputers(inDataModel);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getInstallations(de.boetzmeyer.systemmodel.DataModel)
+	 */
+	@Override
 	public List<DatabaseInstallation> getInstallations(final DataModel inDataModel) {
-		if (inDataModel != null) {
-			return systemAccess.referencesDatabaseInstallationByDataModel(inDataModel.getPrimaryKey());
-		}
-		return new ArrayList<DatabaseInstallation>();
+		return installationService.getInstallations(inDataModel);
 	}
 		
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInterfaces(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public List<ApplicationInterface> getAppInterfaces(final ApplicationConfig inApplicationConfig) {
-		if (inApplicationConfig != null) {
-			return systemAccess.referencesApplicationInterfaceByApplicationConfig(inApplicationConfig.getPrimaryKey());
-		}
-		return new ArrayList<ApplicationInterface>();
+		return applicationService.getAppInterfaces(inApplicationConfig);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addAppInterface(de.boetzmeyer.systemmodel.ApplicationConfig, java.lang.String)
+	 */
+	@Override
 	public ApplicationInterface addAppInterface(final ApplicationConfig inApplicationConfig, final String inInterfaceName) {
-		if (inApplicationConfig != null) {
-			final ApplicationConfig app = systemAccess.findByIDApplicationConfig(inApplicationConfig.getPrimaryKey());
-			if (app != null) {
-				final SystemModel model = SystemModel.createEmpty();
-				final ApplicationInterface appInterface = ApplicationInterface.generate();
-				appInterface.setApplicationConfig(app.getPrimaryKey());
-				appInterface.setInterfaceName(inInterfaceName);
-				model.addApplicationInterface(appInterface);
-				model.save();
-			}
-		}
-		return null;
+		return applicationService.addAppInterface(inApplicationConfig, inInterfaceName);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.ApplicationInterface, java.lang.String, java.lang.String, boolean, de.boetzmeyer.systemmodel.InterfaceMethodParameter[], de.boetzmeyer.systemmodel.InterfaceDataType)
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final ApplicationInterface inApplicationInterface, final String inMethodName, final String inMethodDescription, 
 			final boolean inAsynchronously, final InterfaceMethodParameter[] inParameters, final InterfaceDataType inReturnType) {
-		InterfaceMethod interfaceMethod = null;
-		if (inApplicationInterface != null) {
-			final ApplicationInterface appInterface = systemAccess.findByIDApplicationInterface(inApplicationInterface.getPrimaryKey());
-			if (appInterface != null) {
-				final SystemModel model = SystemModel.createEmpty();
-				interfaceMethod = InterfaceMethod.generate();
-				interfaceMethod.setApplicationInterface(inApplicationInterface.getPrimaryKey());
-				interfaceMethod.setMethodName(inMethodName);
-				interfaceMethod.setAsynchronouslyCall(inAsynchronously);
-				if (inMethodDescription != null) {
-					interfaceMethod.setDescription(inMethodDescription);
-				}
-				model.addInterfaceMethod(interfaceMethod);
-				if (inParameters != null) {
-					for (int i = 0; i < inParameters.length; i++) {
-						if (inParameters[i] != null) {
-							inParameters[i].setInterfaceMethod(interfaceMethod.getPrimaryKey());
-							model.addInterfaceMethodParameter(inParameters[i]);
-						}
-					}					
-				}
-				if (inReturnType != null) {
-					interfaceMethod.setReturnType(inReturnType.getPrimaryKey());
-				}
-				model.save();
-			}
-		}
-		return interfaceMethod;
+		return applicationService.addInterfaceMethod(inApplicationInterface, inMethodName, inMethodDescription, 
+			inAsynchronously, inParameters, inReturnType);
 	}
 		
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.ApplicationInterface, java.lang.String, java.lang.String, boolean, de.boetzmeyer.systemmodel.InterfaceMethodParameter[])
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final ApplicationInterface inApplicationInterface, final String inMethodName, final String inMethodDescription, 
 			final boolean inAsynchronously, final InterfaceMethodParameter[] inParameters) {
-		return addInterfaceMethod(inApplicationInterface, inMethodName, inMethodDescription, inAsynchronously, inParameters, null);
+		return applicationService.addInterfaceMethod(inApplicationInterface, inMethodName, inMethodDescription, inAsynchronously, inParameters);
 	}
 		
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.ApplicationInterface, java.lang.String, java.lang.String)
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final ApplicationInterface inApplicationInterface, final String inMethodName, final String inMethodDescription) {
 		return addInterfaceMethod(inApplicationInterface, inMethodName, inMethodDescription, false, null, null);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.ApplicationInterface, java.lang.String)
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final ApplicationInterface inApplicationInterface, final String inMethodName) {
 		return addInterfaceMethod(inApplicationInterface, inMethodName, null, false, null, null);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#addInterfaceMethod(de.boetzmeyer.systemmodel.ApplicationInterface, java.lang.String, de.boetzmeyer.systemmodel.InterfaceDataType)
+	 */
+	@Override
 	public InterfaceMethod addInterfaceMethod(final ApplicationInterface inApplicationInterface, final String inMethodName, final InterfaceDataType inReturnType) {
 		return addInterfaceMethod(inApplicationInterface, inMethodName, null, false, null, inReturnType);
 	}
@@ -1023,251 +767,123 @@ public class SystemContext {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getDataModel(de.boetzmeyer.systemmodel.DataModel)
+	 */
+	@Override
 	public SystemModel getDataModel(final DataModel inDataModel) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inDataModel != null) {
-			final DataModel dataModel = systemModel.findByIDDataModel(inDataModel.getPrimaryKey());
-			if (dataModel != null) {
-				systemModel.addDataModel(dataModel);
-				final List<ModelEntity> modelEntities = systemModel.referencesModelEntityByDataModel(dataModel.getPrimaryKey());
-				systemModel.addAllModelEntity(modelEntities);
-				for (ModelEntity modelEntity : modelEntities) {
-					if (modelEntity != null) {
-						final List<ModelAttribute> modelAttributes = systemAccess.referencesModelAttributeByModelEntity(modelEntity.getPrimaryKey());
-						final SystemModel attributesModel = systemAccess.exportModelAttribute(modelAttributes);
-						systemModel.add(attributesModel);
-						final List<ModelReference> modelReferencesIn = systemAccess.referencesModelReferenceBySource(modelEntity.getPrimaryKey());
-						final SystemModel inReferencesModel = systemAccess.exportModelReference(modelReferencesIn);
-						systemModel.add(inReferencesModel);
-						final List<ModelReference> modelReferencesOut = systemAccess.referencesModelReferenceByDestination(modelEntity.getPrimaryKey());
-						final SystemModel outReferencesModel = systemAccess.exportModelReference(modelReferencesOut);
-						systemModel.add(outReferencesModel);
-					}
-				}
-			}
-		}
-		return systemModel;
+		return dataModelService.getDataModel(inDataModel);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppConfigurationModel(de.boetzmeyer.systemmodel.ApplicationConfig)
+	 */
+	@Override
 	public SystemModel getAppConfigurationModel(final ApplicationConfig inApp) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inApp != null) {
-			final ApplicationConfig app = systemAccess.findByIDApplicationConfig(inApp.getPrimaryKey());
-			if (app != null) {
-				systemModel.addApplicationConfig(app);
-				final List<ConfigurationItem> configurationItems = systemAccess.referencesConfigurationItemByApplicationConfig(app.getPrimaryKey());
-				systemModel.addAllConfigurationItem(configurationItems);
-				for (ConfigurationItem configurationItem : configurationItems) {
-					final List<ConfigurationItemLink> configurationLinksItemIn = systemAccess.referencesConfigurationItemLinkBySource(configurationItem.getPrimaryKey());
-					systemModel.addAllConfigurationItemLink(configurationLinksItemIn);
-					final List<ConfigurationItemLink> configurationLinksItemOut = systemAccess.referencesConfigurationItemLinkByDestination(configurationItem.getPrimaryKey());
-					systemModel.addAllConfigurationItemLink(configurationLinksItemOut);
-				}
-			}
-		}
-		return systemModel;
+		return applicationService.getAppConfigurationModel(inApp);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppSessionModel(de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public SystemModel getAppSessionModel(final ApplicationSession inAppSession) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inAppSession != null) {
-			final ApplicationSession appSession = systemAccess.findByIDApplicationSession(inAppSession.getPrimaryKey());
-			if (appSession != null) {
-				final ApplicationInstallation appInstallation = appSession.getApplicationInstallationRef();
-				if (appInstallation != null) {
-					final ApplicationConfig app = appInstallation.getApplicationConfigRef();
-					if (app != null) {
-						systemModel.addApplicationSession(appSession);
-						final SystemModel appConfigModel = getAppConfigurationModel(app);
-						systemModel.add(appConfigModel);
-						final List<SessionState> sessionStates = systemAccess.referencesSessionStateByApplicationSession(appSession.getPrimaryKey());
-						final SystemModel sessionStateModel = systemAccess.contextExportSessionState(sessionStates);
-						systemModel.add(sessionStateModel);
-					}
-				}
-			}
-		}
-		return systemModel;
+		return sessionService.getAppSessionModel(inAppSession);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getComputerModel(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public SystemModel getComputerModel(final Computer inComputer) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inComputer != null) {
-			final Computer computer = systemAccess.findByIDComputer(inComputer.getPrimaryKey());
-			if (computer != null) {
-				systemModel.addComputer(computer);
-				final List<DatabaseInstallation> databaseInstallations = systemAccess.referencesDatabaseInstallationByComputer(computer.getPrimaryKey());
-				final SystemModel dbModel = systemAccess.exportDatabaseInstallation(databaseInstallations);
-				systemModel.add(dbModel);
-				final List<ApplicationInstallation> appInstallations = systemAccess.referencesApplicationInstallationByComputer(computer.getPrimaryKey());
-				final SystemModel appModel = systemAccess.exportApplicationInstallation(appInstallations);
-				systemModel.add(appModel);
-			}
-		}
-		return systemModel;
+		return infrastructureService.getComputerModel(inComputer);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemInfrastructureModel(de.boetzmeyer.systemmodel.Infrastructure)
+	 */
+	@Override
 	public SystemModel getSystemInfrastructureModel(final Infrastructure inInfrastructure) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inInfrastructure != null) {
-			final Infrastructure infrastructure = systemAccess.findByIDInfrastructure(inInfrastructure.getPrimaryKey());
-			if (infrastructure != null) {
-				systemModel.addInfrastructure(infrastructure);
-				final List<SystemConfig> systems = systemAccess.referencesSystemConfigByInfrastructure(infrastructure.getPrimaryKey());
-				final SystemModel systemNetModel = systemAccess.contextExportSystemConfig(systems);
-				systemModel.add(systemNetModel);
-			}
-		}
-		return systemModel;
+		return infrastructureService.getSystemInfrastructureModel(inInfrastructure);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSystemModel(de.boetzmeyer.systemmodel.SystemConfig)
+	 */
+	@Override
 	public SystemModel getSystemModel(final SystemConfig inSystem) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inSystem != null) {
-			final SystemConfig system = systemAccess.findByIDSystemConfig(inSystem.getPrimaryKey());
-			if (system != null) {
-				systemModel.addSystemConfig(system);
-				final List<ApplicationConfig> apps = systemAccess.referencesApplicationConfigBySystemConfig(system.getPrimaryKey());
-				final SystemModel appModel = systemAccess.contextExportApplicationConfig(apps);
-				systemModel.add(appModel);
-			}
-		}
-		return systemModel;
+		return infrastructureService.getSystemModel(inSystem);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getInterfaceModel(de.boetzmeyer.systemmodel.ApplicationInterface)
+	 */
+	@Override
 	public SystemModel getInterfaceModel(final ApplicationInterface inInterface) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		if (inInterface != null) {
-			final ApplicationInterface appInterface = systemAccess.findByIDApplicationInterface(inInterface.getPrimaryKey());
-			if (appInterface != null) {
-				final SystemModel interfaceBasic = systemAccess.exportApplicationInterface(appInterface.getPrimaryKey());
-				systemModel.add(interfaceBasic);
-				final List<InterfaceMethod> methods = systemAccess.referencesInterfaceMethodByApplicationInterface(appInterface.getPrimaryKey());
-				final SystemModel methodModel = systemAccess.contextExportInterfaceMethod(methods);
-				systemModel.add(methodModel);
-			}
-		}
-		return systemModel;
+		return applicationService.getInterfaceModel(inInterface);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInstallations(de.boetzmeyer.systemmodel.InterfaceMethod)
+	 */
+	@Override
 	public List<ApplicationInstallation> getAppInstallations(final InterfaceMethod inMethod) {
-		if (inMethod != null) {
-			final ApplicationInterface appInterface = inMethod.getApplicationInterfaceRef();
-			if (appInterface != null) {
-				final ApplicationConfig app = appInterface.getApplicationConfigRef();
-				if (app != null) {
-					return systemAccess.referencesApplicationInstallationByApplicationConfig(app.getPrimaryKey());
-				}
-			}
-		}
-		return new ArrayList<ApplicationInstallation>();
+		return installationService.getAppInstallations(inMethod);
 	}
 	
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInstallationsAvailable(de.boetzmeyer.systemmodel.InterfaceMethod)
+	 */
+	@Override
 	public List<ApplicationInstallation> getAppInstallationsAvailable(final InterfaceMethod inMethod) {
-		final List<ApplicationInstallation> availableInstallations = new ArrayList<ApplicationInstallation>();
-		final List<ApplicationInstallation> allInstallations = getAppInstallations(inMethod);
-		for (ApplicationInstallation installation : allInstallations) {
-			final List<ApplicationSession> sessions = systemAccess.referencesApplicationSessionByApplicationInstallation(installation.getPrimaryKey());
-			for (ApplicationSession session : sessions) {
-				if ((session.getFromDate().getTime() == session.getToDate().getTime())) {
-					availableInstallations.add(installation);
-					break;
-				}
-			}
-		}
-		return availableInstallations;
+		return installationService.getAppInstallationsAvailable(inMethod);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#shutdown(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public void shutdown(final Computer inComputer) {
-		final SystemModel systemModel = SystemModel.createEmpty();
-		final Date now = new Date();
-		final List<ApplicationSession> openAppSessions = getRunningApps(inComputer);
-		for (ApplicationSession applicationSession : openAppSessions) {
-			applicationSession.setToDate(now);
-			systemModel.addApplicationSession(applicationSession);
-		}
-		final List<DatabaseSession> openDbSessions = getRunningDatabases(inComputer);
-		for (DatabaseSession databaseSession : openDbSessions) {
-			databaseSession.setToDate(now);
-			systemModel.addDatabaseSession(databaseSession);
-		}
-		systemModel.save();
+		sessionService.shutdown(inComputer);;
 	}
 
-	private List<DatabaseSession> getRunningDatabases(final Computer inComputer) {
-		final List<DatabaseInstallation> installations = getDatabaseInstallations(inComputer);
-		final List<DatabaseSession> runningSessions = new ArrayList<DatabaseSession>();
-		final Date now = new Date();
-		for (DatabaseInstallation installation : installations) {
-			final List<DatabaseSession> sessions = systemAccess.referencesDatabaseSessionByDatabaseInstallation(installation.getPrimaryKey());
-			for (DatabaseSession session : sessions) {
-				if ((now.after(session.getFromDate()))) {
-					if (session.getFromDate() == session.getToDate()) {
-						runningSessions.add(session);
-					}
-				}
-			}
-		}
-		return runningSessions;
-	}
-
-	private List<DatabaseInstallation> getDatabaseInstallations(final Computer inComputer) {
-		if (inComputer != null) {
-			return systemAccess.referencesDatabaseInstallationByComputer(inComputer.getPrimaryKey());
-		}
-		return new ArrayList<DatabaseInstallation>();
-	}
-
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#shutdown(de.boetzmeyer.systemmodel.ApplicationSession)
+	 */
+	@Override
 	public void shutdown(final ApplicationSession inAppSession) {
-		if (inAppSession != null) {
-			inAppSession.setToDate(new Date());
-			inAppSession.save();
-		}
+		sessionService.shutdown(inAppSession);
 	}
 	
-	public void startApp(final ApplicationInstallation inAppInstallation) {
-		if (inAppInstallation != null) {
-			final ApplicationSession appSession = ApplicationSession.generate();
-			final Date now = new Date();
-			appSession.setApplicationInstallation(inAppInstallation.getPrimaryKey());
-			appSession.setFromDate(now);
-			appSession.setToDate(new Date(now.getTime()));
-			appSession.save();
-		}
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#startApp(de.boetzmeyer.systemmodel.ApplicationInstallation)
+	 */
+	@Override
+	public ApplicationSession startApp(final ApplicationInstallation inAppInstallation) {
+		return sessionService.startApp(inAppInstallation);
 	}
 	
-	public void startDatabase(final DatabaseInstallation inDbInstallation) {
-		if (inDbInstallation != null) {
-			final DatabaseSession dbSession = DatabaseSession.generate();
-			final Date now = new Date();
-			dbSession.setDatabaseInstallation(inDbInstallation.getPrimaryKey());
-			dbSession.setFromDate(now);
-			dbSession.setToDate(new Date(now.getTime()));
-			dbSession.save();
-		}
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#startDatabase(de.boetzmeyer.systemmodel.DatabaseInstallation)
+	 */
+	@Override
+	public DatabaseSession startDatabase(final DatabaseInstallation inDbInstallation) {
+		return sessionService.startDatabase(inDbInstallation);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#installComputer(java.lang.String, java.lang.String, java.lang.String, de.boetzmeyer.systemmodel.Network)
+	 */
+	@Override
 	public void installComputer(final String inComputerName, final String inIPAddress, final String inRemarks, final Network inNetwork) {
-		final Computer computer = Computer.generate();
-		computer.setComputerName(inComputerName);
-		computer.setIPAddress(inIPAddress);
-		computer.setRemarks(inRemarks);
-		if (inNetwork != null) {
-			computer.setNetwork(inNetwork.getPrimaryKey());
-		}
+		installationService.installComputer(inComputerName, inIPAddress, inRemarks, inNetwork);
 	}
 
+	/* (non-Javadoc)
+	 * @see de.boetzmeyer.systemcontext.ISystemContext#uninstallComputer(de.boetzmeyer.systemmodel.Computer)
+	 */
+	@Override
 	public void uninstallComputer(final Computer inComputer) {
-		if (inComputer != null) {
-			final List<ApplicationInstallation> appInstallations = systemAccess.referencesApplicationInstallationByComputer(inComputer.getPrimaryKey());
-			for (ApplicationInstallation applicationInstallation : appInstallations) {
-				uninstallApp(applicationInstallation);
-			}
-			final List<DatabaseInstallation> dbInstallations = systemAccess.referencesDatabaseInstallationByComputer(inComputer.getPrimaryKey());
-			for (DatabaseInstallation dbInstallation : dbInstallations) {
-				uninstallDatabase(dbInstallation);
-			}
-			systemAccess.deleteComputer(inComputer.getPrimaryKey());
-		}
+		installationService.uninstallComputer(inComputer);
 	}
 }
