@@ -6,7 +6,7 @@ import java.util.List;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemLink;
 
-public class Analyser {
+final class Analyser {
 
 	public Analyser() {
 	}
