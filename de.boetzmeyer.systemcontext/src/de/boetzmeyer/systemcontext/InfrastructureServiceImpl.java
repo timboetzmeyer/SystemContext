@@ -14,6 +14,7 @@ import de.boetzmeyer.systemmodel.Network;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemLink;
 import de.boetzmeyer.systemmodel.SystemModel;
+import de.boetzmeyer.systemmodel.SystemType;
 
 final class InfrastructureServiceImpl extends SystemContextService implements InfrastructureService {
 
@@ -70,6 +71,17 @@ final class InfrastructureServiceImpl extends SystemContextService implements In
 					}
 				}
 			}
+		}
+		return null;
+	}
+
+	@Override
+	public SystemType addSystemType(SystemType inSystemType) {
+		if ((inSystemType != null) && inSystemType.isValid()) {
+			final SystemModel model = SystemModel.createEmpty();
+			model.addSystemType(inSystemType);
+			model.save();
+			return inSystemType;
 		}
 		return null;
 	}
@@ -308,6 +320,11 @@ final class InfrastructureServiceImpl extends SystemContextService implements In
 	@Override
 	public List<SystemConfig> getSystems() {
 		return systemAccess.listSystemConfig();
+	}
+
+	@Override
+	public List<SystemType> getSystemTypes() {
+		return systemAccess.listSystemType();
 	}
 
 	@Override

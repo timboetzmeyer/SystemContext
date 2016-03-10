@@ -10,6 +10,7 @@ import de.boetzmeyer.systemmodel.Network;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemLink;
 import de.boetzmeyer.systemmodel.SystemModel;
+import de.boetzmeyer.systemmodel.SystemType;
 
 public interface InfrastructureService {
 
@@ -59,8 +60,12 @@ public interface InfrastructureService {
 
 	List<SystemConfig> getSystems();
 
+	List<SystemType> getSystemTypes();
+
 	List<SystemConfig> getSystems(Infrastructure inInfrastructure);
 
 	Computer findComputer(Computer inComputer);
+
+	SystemType addSystemType(SystemType systemType);
 
 }

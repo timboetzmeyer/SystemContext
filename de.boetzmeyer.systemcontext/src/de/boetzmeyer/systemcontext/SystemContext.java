@@ -32,6 +32,7 @@ import de.boetzmeyer.systemmodel.Settings;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemLink;
 import de.boetzmeyer.systemmodel.SystemModel;
+import de.boetzmeyer.systemmodel.SystemType;
 
 public class SystemContext implements ISystemContext {
 	private static ISystemContext singleton;
@@ -885,5 +886,15 @@ public class SystemContext implements ISystemContext {
 	@Override
 	public void uninstallComputer(final Computer inComputer) {
 		installationService.uninstallComputer(inComputer);
+	}
+
+	@Override
+	public List<SystemType> getSystemTypes() {
+		return infrastructureService.getSystemTypes();
+	}
+
+	@Override
+	public SystemType addSystemType(SystemType systemType) {
+		return infrastructureService.addSystemType(systemType);
 	}
 }
