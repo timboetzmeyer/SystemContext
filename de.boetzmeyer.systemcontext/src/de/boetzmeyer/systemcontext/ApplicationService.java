@@ -94,4 +94,8 @@ public interface ApplicationService {
 
 	SystemModel getAppDependencies(ApplicationConfig deliveryApp);
 
+	void configureApp(ApplicationConfig customerApp, Map<String, String> inItems);
+
+	String getConfigurationValue(ApplicationConfig customerApp, String inKey);
+
 }

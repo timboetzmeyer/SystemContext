@@ -912,4 +912,14 @@ public class SystemContext implements ISystemContext {
 	public SystemModel getAppDependencies(ApplicationConfig inApp) {
 		return applicationService.getAppDependencies(inApp);
 	}
+
+	@Override
+	public void configureApp(ApplicationConfig inApp, Map<String, String> inItems) {
+		applicationService.configureApp(inApp, inItems);
+	}
+
+	@Override
+	public String getConfigurationValue(ApplicationConfig inApp, String inKey) {
+		return applicationService.getConfigurationValue(inApp, inKey);
+	}
 }

@@ -9,7 +9,7 @@ import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
-@SuiteClasses({InfrastructureServiceTest.class, ApplicationServiceTest.class})
+@SuiteClasses({InfrastructureServiceTest.class, ApplicationServiceTest.class, SessionServiceTest.class})
 public class AllTests {
 	protected static final File DIR = new File(System.getProperty("user.dir") + Character.toString(File.separatorChar) + "JUnitSystemContext");
 	

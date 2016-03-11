@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import de.boetzmeyer.systemmodel.ApplicationConfig;
@@ -301,6 +302,7 @@ final class ApplicationServiceImpl extends SystemContextService implements Appli
 				appInterface.setInterfaceName(inInterfaceName);
 				model.addApplicationInterface(appInterface);
 				model.save();
+				return appInterface;
 			}
 		}
 		return null;
@@ -543,6 +545,43 @@ final class ApplicationServiceImpl extends SystemContextService implements Appli
 				addToGraph(applicationLink.getDestinationRef(), dependencyGraph);
 			}
 		}
+	}
+
+	@Override
+	public void configureApp(final ApplicationConfig inApp, Map<String, String> inItems) {
+		if (inApp != null) {
+			final ApplicationConfig foundApp = systemAccess.findByIDApplicationConfig(inApp.getPrimaryKey());
+			if (foundApp != null) {
+				final SystemModel model = SystemModel.createEmpty();
+				for (Entry<String, String> entry : inItems.entrySet()) {
+					if (entry != null) {
+						final ConfigurationItem item = ConfigurationItem.generate();
+						item.setApplicationConfig(foundApp.getPrimaryKey());
+						item.setItemKey(entry.getKey());
+						item.setItemValue(entry.getValue());
+						model.addConfigurationItem(item);
+					}
+				}
+				if (model.sizeConfigurationItem() == inItems.size()) {
+					model.save();
+				}
+			}
+		}
+	}
+
+	@Override
+	public String getConfigurationValue(ApplicationConfig inApp, String inKey) {
+		if ((inApp != null) && (inKey != null)) {
+			final List<ConfigurationItem> appConfigItems = systemAccess.referencesConfigurationItemByApplicationConfig(inApp.getPrimaryKey());
+			for (ConfigurationItem configurationItem : appConfigItems) {
+				if (configurationItem != null) {
+					if (inKey.equals(configurationItem.getItemKey())) {
+						return configurationItem.getItemValue();
+					}
+				}
+			}
+		}
+		return null;
 	}
 
 }
