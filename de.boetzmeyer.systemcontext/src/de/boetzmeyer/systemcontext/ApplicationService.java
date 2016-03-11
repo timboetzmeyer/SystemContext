@@ -15,6 +15,7 @@ import de.boetzmeyer.systemmodel.InterfaceMethod;
 import de.boetzmeyer.systemmodel.InterfaceMethodParameter;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemModel;
+import de.boetzmeyer.systemmodel.SystemType;
 
 public interface ApplicationService {
 
@@ -86,5 +87,11 @@ public interface ApplicationService {
 	ApplicationConfig findAppByName(String inApplicationName);
 
 	SystemModel getInterfaceModel(ApplicationInterface inInterface);
+
+	List<ApplicationType> getApplicationTypes();
+
+	List<ApplicationConfig> getApplications();
+
+	SystemModel getAppDependencies(ApplicationConfig deliveryApp);
 
 }

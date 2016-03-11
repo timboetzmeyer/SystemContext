@@ -3,9 +3,7 @@ package de.boetzmeyer.systemcontext;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 
 import org.junit.Test;
 
@@ -17,14 +15,14 @@ import de.boetzmeyer.systemmodel.SystemModel;
 import de.boetzmeyer.systemmodel.SystemType;
 
 public class InfrastructureServiceTest {
-	private static final File DIR = new File(System.getProperty("user.dir") + Character.toString(File.separatorChar) + "JUnitSystemContext");
 	
 	@Test
 	public void testInfrastructureService() {
 		try {
-			deleteExistingSystemModelFiles();
+			AllTests.deleteExistingSystemModelFiles();
 			
-			final InfrastructureService infrastructureService = SystemContext.connect(DIR.getAbsolutePath());
+			// connect with infrastructure service
+			final InfrastructureService infrastructureService = SystemContext.connect(AllTests.DIR.getAbsolutePath());
 			
 			// create infrastructure locally
 			final Infrastructure infrastructure = Infrastructure.generate();
@@ -173,25 +171,10 @@ public class InfrastructureServiceTest {
 			assertEquals(3, model.listSystemConfig().size());     // "System 1", "System 2", "System 3" 
 			assertEquals(3, model.listSystemLink().size());       // "1 -> 2", "1 -> 3", "2 -> 3"
 			
-			deleteExistingSystemModelFiles();
+			AllTests.deleteExistingSystemModelFiles();
 		} catch (IOException e) {
 			fail(e.getMessage());
 		}
-	}
-
-	private void deleteExistingSystemModelFiles() throws IOException {
-		if (DIR.exists()) {
-			final File[] files = DIR.listFiles();
-			if (files != null) {
-				for (int i = 0; i < files.length; i++) {
-					if ((files[i] != null) && (files[i].isFile())) {
-						files[i].delete();
-					}
-				}
-			}
-			Files.delete(DIR.toPath());
-		}
-		DIR.mkdirs();
 	}
 
 }

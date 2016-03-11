@@ -897,4 +897,19 @@ public class SystemContext implements ISystemContext {
 	public SystemType addSystemType(SystemType systemType) {
 		return infrastructureService.addSystemType(systemType);
 	}
+
+	@Override
+	public List<ApplicationType> getApplicationTypes() {
+		return applicationService.getApplicationTypes();
+	}
+
+	@Override
+	public List<ApplicationConfig> getApplications() {
+		return applicationService.getApplications();
+	}
+
+	@Override
+	public SystemModel getAppDependencies(ApplicationConfig inApp) {
+		return applicationService.getAppDependencies(inApp);
+	}
 }

@@ -514,4 +514,35 @@ final class ApplicationServiceImpl extends SystemContextService implements Appli
 		return systemModel;
 	}
 
+	@Override
+	public List<ApplicationType> getApplicationTypes() {
+		return systemAccess.listApplicationType();
+	}
+
+	@Override
+	public List<ApplicationConfig> getApplications() {
+		return systemAccess.listApplicationConfig();
+	}
+
+	@Override
+	public SystemModel getAppDependencies(ApplicationConfig inApp) {
+		final SystemModel dependencyGraph = SystemModel.createEmpty();
+		if (inApp != null) {
+			final ApplicationConfig rootApp = systemAccess.findByIDApplicationConfig(inApp.getPrimaryKey());
+			addToGraph(rootApp, dependencyGraph);
+		}
+		return dependencyGraph;
+	}
+
+	private void addToGraph(final ApplicationConfig inApp, final SystemModel dependencyGraph) {
+		if (inApp != null) {
+			dependencyGraph.addApplicationConfig(inApp);
+			final List<ApplicationLink> requiredAppLinks = systemAccess.referencesApplicationLinkBySource(inApp.getPrimaryKey());
+			for (ApplicationLink applicationLink : requiredAppLinks) {
+				dependencyGraph.addApplicationLink(applicationLink);
+				addToGraph(applicationLink.getDestinationRef(), dependencyGraph);
+			}
+		}
+	}
+
 }
