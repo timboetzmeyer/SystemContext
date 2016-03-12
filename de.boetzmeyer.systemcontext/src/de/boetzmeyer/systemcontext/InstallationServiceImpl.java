@@ -259,7 +259,7 @@ final class InstallationServiceImpl extends SystemContextService implements Inst
 	}
 
 	@Override
-	public void installComputer(String inComputerName, String inIPAddress, String inRemarks, Network inNetwork) {
+	public Computer installComputer(String inComputerName, String inIPAddress, String inRemarks, Network inNetwork) {
 		final Computer computer = Computer.generate();
 		computer.setComputerName(inComputerName);
 		computer.setIPAddress(inIPAddress);
@@ -267,6 +267,8 @@ final class InstallationServiceImpl extends SystemContextService implements Inst
 		if (inNetwork != null) {
 			computer.setNetwork(inNetwork.getPrimaryKey());
 		}
+		computer.save();
+		return computer;
 	}
 
 	@Override

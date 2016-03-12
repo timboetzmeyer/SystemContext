@@ -26,7 +26,7 @@ public interface SessionService {
 
 	boolean logout(ApplicationSession inApplicationSession);
 
-	List<ApplicationSession> getSessions(ApplicationInstallation inApplicationInstallation);
+	List<ApplicationSession> getActiveSessions(ApplicationInstallation inApplicationInstallation);
 
 	List<SessionState> getSessionStates(ApplicationSession inApplicationSession);
 

@@ -80,8 +80,18 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 	}
 
 	@Override
-	public List<ApplicationSession> getSessions(ApplicationInstallation inApplicationInstallation) {
-		return systemAccess.referencesApplicationSessionByApplicationInstallation(inApplicationInstallation.getPrimaryKey());
+	public List<ApplicationSession> getActiveSessions(ApplicationInstallation inApplicationInstallation) {
+		final List<ApplicationSession> activeSessions = new ArrayList<ApplicationSession>();
+		final List<ApplicationSession> sessions = systemAccess.referencesApplicationSessionByApplicationInstallation(inApplicationInstallation.getPrimaryKey());
+		final Date now = new Date();
+		for (ApplicationSession session : sessions) {
+			if ((now.after(session.getFromDate()))) {
+				if (session.getFromDate().equals(session.getToDate())) {
+					activeSessions.add(session);
+				}
+			}
+		}
+		return activeSessions;
 	}
 
 	@Override
@@ -172,7 +182,7 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 			final List<ApplicationSession> sessions = systemAccess.referencesApplicationSessionByApplicationInstallation(installation.getPrimaryKey());
 			for (ApplicationSession session : sessions) {
 				if ((now.after(session.getFromDate()))) {
-					if (session.getFromDate() == session.getToDate()) {
+					if (session.getFromDate().equals(session.getToDate())) {
 						runningSessions.add(session);
 					}
 				}

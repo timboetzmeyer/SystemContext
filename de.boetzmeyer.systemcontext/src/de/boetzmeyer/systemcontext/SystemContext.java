@@ -364,8 +364,8 @@ public class SystemContext implements ISystemContext {
 	 * @see de.boetzmeyer.systemcontext.ISystemContext#getSessions(de.boetzmeyer.systemmodel.ApplicationInstallation)
 	 */
 	@Override
-	public List<ApplicationSession> getSessions(final ApplicationInstallation inApplicationInstallation) {
-		return sessionService.getSessions(inApplicationInstallation);
+	public List<ApplicationSession> getActiveSessions(final ApplicationInstallation inApplicationInstallation) {
+		return sessionService.getActiveSessions(inApplicationInstallation);
 	}
 	
 	/* (non-Javadoc)
@@ -876,8 +876,8 @@ public class SystemContext implements ISystemContext {
 	 * @see de.boetzmeyer.systemcontext.ISystemContext#installComputer(java.lang.String, java.lang.String, java.lang.String, de.boetzmeyer.systemmodel.Network)
 	 */
 	@Override
-	public void installComputer(final String inComputerName, final String inIPAddress, final String inRemarks, final Network inNetwork) {
-		installationService.installComputer(inComputerName, inIPAddress, inRemarks, inNetwork);
+	public Computer installComputer(final String inComputerName, final String inIPAddress, final String inRemarks, final Network inNetwork) {
+		return installationService.installComputer(inComputerName, inIPAddress, inRemarks, inNetwork);
 	}
 
 	/* (non-Javadoc)

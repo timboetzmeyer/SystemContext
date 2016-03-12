@@ -13,7 +13,7 @@ import de.boetzmeyer.systemmodel.Network;
 
 public interface InstallationService {
 
-	void installComputer(String inComputerName, String inIPAddress, String inRemarks, Network inNetwork);
+	Computer installComputer(String inComputerName, String inIPAddress, String inRemarks, Network inNetwork);
 
 	void uninstallComputer(Computer inComputer);
 

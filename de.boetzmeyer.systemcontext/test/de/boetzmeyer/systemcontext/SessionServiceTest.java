@@ -10,7 +10,11 @@ import java.util.Map;
 import org.junit.Test;
 
 import de.boetzmeyer.systemmodel.ApplicationConfig;
+import de.boetzmeyer.systemmodel.ApplicationInstallation;
+import de.boetzmeyer.systemmodel.ApplicationSession;
 import de.boetzmeyer.systemmodel.ApplicationType;
+import de.boetzmeyer.systemmodel.Computer;
+import de.boetzmeyer.systemmodel.Network;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemType;
 
@@ -85,6 +89,57 @@ public class SessionServiceTest {
 			
 			// query application configuration
 			assertEquals("MyValue 2", appService.getConfigurationValue(customerApp, "publicItem2"));
+			
+			// connect with installation service
+			final InstallationService installationService = SystemContext.connect(AllTests.DIR.getAbsolutePath());
+			
+			// create network locally
+			final Network network = Network.generate();
+			network.setNetworkName("companynet");
+			network.setDescription("The intranet of the company");
+			
+			// save network on the server-side
+			infrastructureService.addNetwork(network);
+			
+			// now network should be known on the server-side
+			assertEquals(1, infrastructureService.getNetworks().size());
+			
+			// create computer on the server-side
+			final Computer computer = installationService.installComputer("proxy", "192.168.2.1", "The proxy server of the local network", network);
+			
+			// now computer should be known on the server-side
+			assertEquals(1, infrastructureService.getComputers().size());
+
+			// create app installation on the server-side
+			final ApplicationInstallation appInstallation = installationService.installApp(computer, customerApp);
+
+			// now app installation should be known on the server-side
+			assertEquals(1, installationService.getAppInstallations(customerApp).size());
+			
+			// connect with session service
+			final SessionService sessionService = SystemContext.connect(AllTests.DIR.getAbsolutePath());
+						
+			// now app installation should be known on the server-side
+			assertEquals(0, sessionService.getActiveSessions(appInstallation).size());
+			
+			// create an app session on the server side
+			final ApplicationSession appSession1 = sessionService.login(appInstallation);			
+			assertEquals(1, sessionService.getActiveSessions(appInstallation).size());
+						
+			// create an app session on the server side
+			final ApplicationSession appSession2 = sessionService.login(appInstallation);			
+			assertEquals(2, sessionService.getActiveSessions(appInstallation).size());
+			
+			// two instances of the customer app are running
+			assertEquals(2, sessionService.getRunningApps(computer).size());
+			
+			// decrease the session count
+			sessionService.logout(appSession2);
+			assertEquals(1, sessionService.getActiveSessions(appInstallation).size());
+			
+			// decrease the session count
+			sessionService.logout(appSession1);
+			assertEquals(0, sessionService.getActiveSessions(appInstallation).size());
 			
 			
 			AllTests.deleteExistingSystemModelFiles();
