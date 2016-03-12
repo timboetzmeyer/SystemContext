@@ -337,22 +337,6 @@ public class SystemContext implements ISystemContext {
 	}
 	
 	/* (non-Javadoc)
-	 * @see de.boetzmeyer.systemcontext.ISystemContext#login(de.boetzmeyer.systemmodel.ApplicationInstallation)
-	 */
-	@Override
-	public ApplicationSession login(final ApplicationInstallation inApplicationInstallation) {
-		return sessionService.login(inApplicationInstallation);
-	}
-	
-	/* (non-Javadoc)
-	 * @see de.boetzmeyer.systemcontext.ISystemContext#logout(de.boetzmeyer.systemmodel.ApplicationSession)
-	 */
-	@Override
-	public boolean logout(final ApplicationSession inApplicationSession) {
-		return sessionService.logout(inApplicationSession);
-	}
-	
-	/* (non-Javadoc)
 	 * @see de.boetzmeyer.systemcontext.ISystemContext#getAppInstallations(de.boetzmeyer.systemmodel.ApplicationConfig)
 	 */
 	@Override

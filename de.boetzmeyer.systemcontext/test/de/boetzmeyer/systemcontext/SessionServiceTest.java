@@ -5,6 +5,7 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
@@ -14,11 +15,18 @@ import de.boetzmeyer.systemmodel.ApplicationInstallation;
 import de.boetzmeyer.systemmodel.ApplicationSession;
 import de.boetzmeyer.systemmodel.ApplicationType;
 import de.boetzmeyer.systemmodel.Computer;
+import de.boetzmeyer.systemmodel.ConfigurationItem;
 import de.boetzmeyer.systemmodel.Network;
+import de.boetzmeyer.systemmodel.SessionState;
 import de.boetzmeyer.systemmodel.SystemConfig;
 import de.boetzmeyer.systemmodel.SystemType;
 
 public class SessionServiceTest {
+
+	private static final String ITEM_VALUE_2 = "MyValue 2";
+	private static final String ITEM_VALUE_1 = "MyValue 1";
+	private static final String ITEM_KEY_2 = "publicItem2";
+	private static final String ITEM_KEY_1 = "publicItem1";
 
 	@Test
 	public void testSessionService() {
@@ -81,14 +89,14 @@ public class SessionServiceTest {
 			
 			// create configuration item for customer management app
 			final Map<String, String> items = new HashMap<String, String>();
-			items.put("publicItem1", "MyValue 1");
-			items.put("publicItem2", "MyValue 2");
+			items.put(ITEM_KEY_1, ITEM_VALUE_1);
+			items.put(ITEM_KEY_2, ITEM_VALUE_2);
 			
 			// save application on the server-side
 			appService.configureApp(customerApp, items);
 			
 			// query application configuration
-			assertEquals("MyValue 2", appService.getConfigurationValue(customerApp, "publicItem2"));
+			assertEquals(ITEM_VALUE_2, appService.getConfigurationValue(customerApp, ITEM_KEY_2));
 			
 			// connect with installation service
 			final InstallationService installationService = SystemContext.connect(AllTests.DIR.getAbsolutePath());
@@ -123,22 +131,34 @@ public class SessionServiceTest {
 			assertEquals(0, sessionService.getActiveSessions(appInstallation).size());
 			
 			// create an app session on the server side
-			final ApplicationSession appSession1 = sessionService.login(appInstallation);			
-			assertEquals(1, sessionService.getActiveSessions(appInstallation).size());
-						
+			final ApplicationSession appSession1 = sessionService.startApp(appInstallation);			
+			assertEquals(1, sessionService.getActiveSessions(appInstallation).size());			
+			
 			// create an app session on the server side
-			final ApplicationSession appSession2 = sessionService.login(appInstallation);			
+			final ApplicationSession appSession2 = sessionService.startApp(appInstallation);			
 			assertEquals(2, sessionService.getActiveSessions(appInstallation).size());
 			
 			// two instances of the customer app are running
 			assertEquals(2, sessionService.getRunningApps(computer).size());
 			
-			// decrease the session count
-			sessionService.logout(appSession2);
+			// publish item state of in app session 1
+			final ConfigurationItem configurationItem = appService.findRootItem(customerApp);
+			sessionService.updatePropertyState("selectedCustomerName", "Mike Miller", configurationItem, appSession1);
+			sessionService.updatePropertyState("selectedCustomerCity", "Bangalore", configurationItem, appSession1);
+
+			// try to read the published state from the wrong running customer app instance
+			assertEquals(0, sessionService.getSessionStates(appSession2).size());
+			
+			// try to read the published state from the correct running customer app instance
+			final List<SessionState> sessionStates = sessionService.getSessionStates(appSession1);
+			assertEquals(1, sessionStates.size());
+			assertEquals(2, sessionService.getStates(sessionStates.get(0)).size());
+			
+			// stop one application instance/session
+			sessionService.shutdown(appSession2);
 			assertEquals(1, sessionService.getActiveSessions(appInstallation).size());
 			
-			// decrease the session count
-			sessionService.logout(appSession1);
+			sessionService.shutdown(appSession1);
 			assertEquals(0, sessionService.getActiveSessions(appInstallation).size());
 			
 			

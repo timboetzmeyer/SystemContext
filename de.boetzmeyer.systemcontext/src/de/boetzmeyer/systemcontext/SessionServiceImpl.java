@@ -53,30 +53,28 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 	}
 
 	@Override
-	public ApplicationSession login(ApplicationInstallation inApplicationInstallation) {
-		if (inApplicationInstallation != null) {
-			final ApplicationSession applicationSession = ApplicationSession.generate();
-			applicationSession.setApplicationInstallation(inApplicationInstallation.getPrimaryKey());
+	public ApplicationSession startApp(final ApplicationInstallation inAppInstallation) {
+		if (inAppInstallation != null) {
+			final ApplicationSession appSession = ApplicationSession.generate();
 			final Date now = new Date();
-			applicationSession.setFromDate(now);
-			applicationSession.setToDate(new Date(now.getTime()));
-			applicationSession.save();
-			return applicationSession;
+			appSession.setApplicationInstallation(inAppInstallation.getPrimaryKey());
+			appSession.setFromDate(now);
+			appSession.setToDate(new Date(now.getTime()));
+			appSession.save();
+			return appSession;
 		}
 		return null;
 	}
 
 	@Override
-	public boolean logout(ApplicationSession inApplicationSession) {
-		if (inApplicationSession != null) {
-			final ApplicationSession foundSession = systemAccess.findByIDApplicationSession(inApplicationSession.getPrimaryKey());
+	public void shutdown(ApplicationSession inAppSession) {
+		if (inAppSession != null) {
+			final ApplicationSession foundSession = systemAccess.findByIDApplicationSession(inAppSession.getPrimaryKey());
 			if (foundSession != null) {
 				foundSession.setToDate(new Date());
 				foundSession.save();
-				return true;
 			}			
 		}
-		return false;
 	}
 
 	@Override
@@ -107,8 +105,19 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 	@Override
 	public boolean updatePropertyState(String inPropertyKey, String inPropertyValue,
 			ConfigurationItem inConfigurationItem, ApplicationSession inApplicationSession) {
-		final List<PropertyState> propertyStates = getConfigurationItemState(inConfigurationItem, inApplicationSession);
-		for (PropertyState propertyState : propertyStates) {
+		SessionState sessionStateCI = null;
+		final List<PropertyState> foundPropertyStates = new ArrayList<PropertyState>();
+		final List<SessionState> sessionStates = getSessionStates(inApplicationSession);
+		for (SessionState sessionState : sessionStates) {
+			if (sessionState != null) {
+				if (sessionState.getConfigurationItem() == inConfigurationItem.getPrimaryKey()) {
+					sessionStateCI = sessionState;
+					foundPropertyStates.addAll(systemAccess.referencesPropertyStateBySessionState(sessionState.getPrimaryKey()));
+					break;
+				}
+			}
+		}
+		for (PropertyState propertyState : foundPropertyStates) {
 			if (propertyState != null) {
 				if (propertyState.getPropertyKey().equalsIgnoreCase(inPropertyKey)) {
 					propertyState.setPropertyValue(inPropertyValue);
@@ -117,11 +126,20 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 				}
 			}
 		}
+		final SystemModel ta = SystemModel.createEmpty();
+		if (sessionStateCI == null) {
+			sessionStateCI = SessionState.generate();
+			sessionStateCI.setApplicationSession(inApplicationSession.getPrimaryKey());
+			sessionStateCI.setConfigurationItem(inConfigurationItem.getPrimaryKey());
+			ta.addSessionState(sessionStateCI);
+		}
 		final PropertyState propertyState = PropertyState.generate();
+		propertyState.setSessionState(sessionStateCI.getPrimaryKey());
 		propertyState.setPropertyKey(inPropertyKey);
 		propertyState.setPropertyValue(inPropertyValue);
 		propertyState.setLastUpdated(new Date());
-		return propertyState.save();
+		ta.addPropertyState(propertyState);
+		return ta.save();
 	}
 
 	@Override
@@ -156,14 +174,6 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 			}
 		}
 		return new ArrayList<PropertyState>();
-	}
-
-	@Override
-	public void shutdown(ApplicationSession inAppSession) {
-		if (inAppSession != null) {
-			inAppSession.setToDate(new Date());
-			inAppSession.save();
-		}
 	}
 	
 	private List<ApplicationInstallation> getInstallations(Computer inComputer) {
@@ -272,20 +282,6 @@ final class SessionServiceImpl extends SystemContextService implements SessionSe
 			return systemAccess.referencesDatabaseInstallationByComputer(inComputer.getPrimaryKey());
 		}
 		return new ArrayList<DatabaseInstallation>();
-	}
-
-	@Override
-	public ApplicationSession startApp(final ApplicationInstallation inAppInstallation) {
-		if (inAppInstallation != null) {
-			final ApplicationSession appSession = ApplicationSession.generate();
-			final Date now = new Date();
-			appSession.setApplicationInstallation(inAppInstallation.getPrimaryKey());
-			appSession.setFromDate(now);
-			appSession.setToDate(new Date(now.getTime()));
-			appSession.save();
-			return appSession;
-		}
-		return null;
 	}
 	
 	@Override
